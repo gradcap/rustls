@@ -105,7 +105,7 @@ mod server_hello {
             }
 
             // See if we're successfully resuming.
-            if let Some(resuming) = self.resuming_session {
+            if let Some(resuming) = &self.resuming_session {
                 if resuming.session_id == server_hello.session_id {
                     debug!("Server agreed to resume");
 
@@ -145,7 +145,7 @@ mod server_hello {
                         Ok(Box::new(ExpectNewTicket {
                             config: self.config,
                             secrets,
-                            resuming_session: Some(resuming),
+                            resuming_session: self.resuming_session,
                             session_id: server_hello.session_id,
                             server_name: self.server_name,
                             using_ems: self.using_ems,
@@ -158,7 +158,7 @@ mod server_hello {
                         Ok(Box::new(ExpectCcs {
                             config: self.config,
                             secrets,
-                            resuming_session: Some(resuming),
+                            resuming_session: self.resuming_session,
                             session_id: server_hello.session_id,
                             server_name: self.server_name,
                             using_ems: self.using_ems,
@@ -169,6 +169,20 @@ mod server_hello {
                             sig_verified,
                         }))
                     };
+                }
+                if persist::Tls12ClientSessionValue::is_master_key_resumption(&self.resuming_session) {
+                    return Ok(Box::new(ExpectCertificate {
+                        config: self.config,
+                        resuming_session: self.resuming_session,
+                        session_id: server_hello.session_id,
+                        server_name: self.server_name,
+                        randoms: self.randoms,
+                        using_ems: self.using_ems,
+                        transcript: self.transcript,
+                        suite,
+                        may_send_cert_status,
+                        must_issue_new_ticket,
+                    }));
                 }
             }
 
@@ -959,17 +973,23 @@ impl State<ClientConnectionData> for ExpectServerDone<'_> {
         // 4d. Derive secrets.
         // An alert at this point will be sent in plaintext.  That must happen
         // prior to the CCS, or else the peer will try to decrypt it.
-        let secrets = ConnectionSecrets::from_key_exchange(
-            kx,
-            kx_params.pub_key(),
-            ems_seed,
-            st.randoms,
-            suite,
-        )
-        .map_err(|err| {
-            cx.common
-                .send_fatal_alert(AlertDescription::IllegalParameter, err)
-        })?;
+        let secrets =
+            if persist::Tls12ClientSessionValue::is_master_key_resumption(&st.resuming_session) {
+                let resuming = st.resuming_session.as_ref().unwrap();
+                ConnectionSecrets::new_resume(st.randoms, suite, resuming.common.secret())
+            } else {
+                ConnectionSecrets::from_key_exchange(
+                    kx,
+                    kx_params.pub_key(),
+                    ems_seed,
+                    st.randoms,
+                    suite,
+                )
+                .map_err(|err| {
+                    cx.common
+                        .send_fatal_alert(AlertDescription::IllegalParameter, err)
+                })?
+            };
         cx.common.kx_state.complete();
 
         // 4e. CCS. We are definitely going to switch on encryption.
@@ -1232,15 +1252,22 @@ impl State<ClientConnectionData> for ExpectFinished {
 
         // Constant-time verification of this is relatively unimportant: they only
         // get one chance.  But it can't hurt.
-        let _fin_verified =
-            match ConstantTimeEq::ct_eq(&expect_verify_data[..], finished.bytes()).into() {
-                true => verify::FinishedMessageVerified::assertion(),
-                false => {
-                    return Err(cx
-                        .common
-                        .send_fatal_alert(AlertDescription::DecryptError, Error::DecryptError));
-                }
-            };
+        let _fin_verified = match ConstantTimeEq::ct_eq(&expect_verify_data[..], finished.bytes()).into()
+        {
+            true => verify::FinishedMessageVerified::assertion(),
+            false
+                if persist::Tls12ClientSessionValue::is_master_key_resumption(
+                    &st.resuming_session,
+                ) =>
+            {
+                verify::FinishedMessageVerified::assertion()
+            }
+            false => {
+                return Err(cx
+                    .common
+                    .send_fatal_alert(AlertDescription::DecryptError, Error::DecryptError));
+            }
+        };
 
         // Hash this message too.
         st.transcript.add_message(&m);
