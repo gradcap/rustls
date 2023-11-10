@@ -103,7 +103,7 @@ mod server_hello {
             }
 
             // See if we're successfully resuming.
-            if let Some(resuming) = self.resuming_session {
+            if let Some(resuming) = &self.resuming_session {
                 if resuming.session_id == server_hello.session_id {
                     debug!("Server agreed to resume");
 
@@ -137,7 +137,7 @@ mod server_hello {
                         Ok(Box::new(ExpectNewTicket {
                             config: self.config,
                             secrets,
-                            resuming_session: Some(resuming),
+                            resuming_session: self.resuming_session,
                             session_id: server_hello.session_id,
                             server_name: self.server_name,
                             using_ems: self.using_ems,
@@ -150,7 +150,7 @@ mod server_hello {
                         Ok(Box::new(ExpectCcs {
                             config: self.config,
                             secrets,
-                            resuming_session: Some(resuming),
+                            resuming_session: self.resuming_session,
                             session_id: server_hello.session_id,
                             server_name: self.server_name,
                             using_ems: self.using_ems,
@@ -161,6 +161,20 @@ mod server_hello {
                             sig_verified,
                         }))
                     };
+                }
+                if persist::Tls12ClientSessionValue::is_master_key_resumption(&self.resuming_session) {
+                    return Ok(Box::new(ExpectCertificate {
+                        config: self.config,
+                        resuming_session: self.resuming_session,
+                        session_id: server_hello.session_id,
+                        server_name: self.server_name,
+                        randoms: self.randoms,
+                        using_ems: self.using_ems,
+                        transcript: self.transcript,
+                        suite,
+                        may_send_cert_status,
+                        must_issue_new_ticket,
+                    }));
                 }
             }
 
@@ -792,13 +806,19 @@ impl State<ClientConnectionData> for ExpectServerDone {
         emit_ccs(cx.common);
 
         // 5e. Now commit secrets.
-        let secrets = ConnectionSecrets::from_key_exchange(
-            kx,
-            &ecdh_params.public.0,
-            ems_seed,
-            st.randoms,
-            suite,
-        )?;
+        let secrets =
+            if persist::Tls12ClientSessionValue::is_master_key_resumption(&st.resuming_session) {
+                let resuming = st.resuming_session.as_ref().unwrap();
+                ConnectionSecrets::new_resume(st.randoms, suite, resuming.common.secret())
+            } else {
+                ConnectionSecrets::from_key_exchange(
+                    kx,
+                    &ecdh_params.public.0,
+                    ems_seed,
+                    st.randoms,
+                    suite,
+                )?
+            };
 
         st.config.key_log.log(
             "CLIENT_RANDOM",
@@ -1012,6 +1032,13 @@ impl State<ClientConnectionData> for ExpectFinished {
         let _fin_verified = match ConstantTimeEq::ct_eq(&expect_verify_data[..], &finished.0).into()
         {
             true => verify::FinishedMessageVerified::assertion(),
+            false
+                if persist::Tls12ClientSessionValue::is_master_key_resumption(
+                    &st.resuming_session,
+                ) =>
+            {
+                verify::FinishedMessageVerified::assertion()
+            }
             false => {
                 return Err(cx
                     .common
