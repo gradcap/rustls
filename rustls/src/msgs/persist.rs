@@ -149,7 +149,7 @@ pub struct Tls12ClientSessionValue {
 
 #[cfg(feature = "tls12")]
 impl Tls12ClientSessionValue {
-    pub(crate) fn new(
+    pub fn new(
         suite: &'static Tls12CipherSuite,
         session_id: SessionId,
         ticket: Vec<u8>,
@@ -189,6 +189,16 @@ impl Tls12ClientSessionValue {
     /// Test only: rewind epoch by `delta` seconds.
     pub fn rewind_epoch(&mut self, delta: u32) {
         self.common.epoch -= delta as u64;
+    }
+
+    pub fn is_master_key_resumption(me: &Option<Self>) -> bool {
+        me.as_ref().is_some_and(|r| {
+            r.lifetime_secs == 0
+                && r.epoch == 0
+                && !r.secret().is_empty()
+                && r.ticket().is_empty()
+                && r.server_cert_chain().is_empty()
+        })
     }
 }
 
@@ -346,7 +356,7 @@ impl Codec for ServerSessionValue {
 }
 
 impl ServerSessionValue {
-    pub(crate) fn new(
+    pub fn new(
         sni: Option<&DnsName<'_>>,
         v: ProtocolVersion,
         cs: CipherSuite,
@@ -373,7 +383,7 @@ impl ServerSessionValue {
     }
 
     #[cfg(feature = "tls12")]
-    pub(crate) fn set_extended_ms_used(&mut self) {
+    pub fn set_extended_ms_used(&mut self) {
         self.extended_ms = true;
     }
 

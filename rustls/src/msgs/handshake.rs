@@ -18,7 +18,7 @@ use crate::rand;
 use crate::verify::DigitallySignedStruct;
 use crate::x509::wrap_in_sequence;
 
-use pki_types::{CertificateDer, DnsName};
+use pki_types::{CertificateDer, DnsName, ServerName as PkiServerName};
 
 use alloc::collections::BTreeSet;
 #[cfg(feature = "logging")]
@@ -252,6 +252,15 @@ impl ServerNamePayload {
 pub struct ServerName {
     pub(crate) typ: ServerNameType,
     pub(crate) payload: ServerNamePayload,
+}
+
+impl ServerName {
+    pub fn as_pki(&self) -> Option<PkiServerName<'static>> {
+        match self.payload {
+            ServerNamePayload::HostName(ref dns) => Some(PkiServerName::DnsName(dns.clone())),
+            ServerNamePayload::Unknown(_) => None,
+        }
+    }
 }
 
 impl Codec for ServerName {
@@ -874,7 +883,7 @@ impl ClientHelloPayload {
             .find(|x| x.get_type() == ext)
     }
 
-    pub(crate) fn get_sni_extension(&self) -> Option<&[ServerName]> {
+    pub fn get_sni_extension(&self) -> Option<&[ServerName]> {
         let ext = self.find_extension(ExtensionType::ServerName)?;
         match *ext {
             ClientExtension::ServerName(ref req) => Some(req),
@@ -927,11 +936,11 @@ impl ClientHelloPayload {
     }
 
     #[cfg(feature = "tls12")]
-    pub(crate) fn get_ticket_extension(&self) -> Option<&ClientExtension> {
+    pub fn get_ticket_extension(&self) -> Option<&ClientExtension> {
         self.find_extension(ExtensionType::SessionTicket)
     }
 
-    pub(crate) fn get_versions_extension(&self) -> Option<&[ProtocolVersion]> {
+    pub fn get_versions_extension(&self) -> Option<&[ProtocolVersion]> {
         let ext = self.find_extension(ExtensionType::SupportedVersions)?;
         match *ext {
             ClientExtension::SupportedVersions(ref vers) => Some(vers),
@@ -1162,8 +1171,8 @@ impl HelloRetryRequest {
 pub struct ServerHelloPayload {
     pub(crate) legacy_version: ProtocolVersion,
     pub(crate) random: Random,
-    pub(crate) session_id: SessionId,
-    pub(crate) cipher_suite: CipherSuite,
+    pub session_id: SessionId,
+    pub cipher_suite: CipherSuite,
     pub(crate) compression_method: Compression,
     pub(crate) extensions: Vec<ServerExtension>,
 }
@@ -1240,7 +1249,7 @@ impl ServerHelloPayload {
     }
 
     #[cfg(feature = "tls12")]
-    pub(crate) fn ems_support_acked(&self) -> bool {
+    pub fn ems_support_acked(&self) -> bool {
         self.find_extension(ExtensionType::ExtendedMasterSecret)
             .is_some()
     }
