@@ -7,7 +7,7 @@ use alloc::vec::Vec;
 use core::ops::Deref;
 use core::{fmt, iter};
 
-use pki_types::{CertificateDer, DnsName};
+use pki_types::{CertificateDer, DnsName, ServerName as PkiServerName};
 
 #[cfg(feature = "tls12")]
 use crate::crypto::ActiveKeyExchange;
@@ -265,6 +265,20 @@ impl ServerNamePayload {
 pub struct ServerName {
     pub(crate) typ: ServerNameType,
     pub(crate) payload: ServerNamePayload,
+}
+
+impl ServerName {
+    pub fn as_pki(&self) -> Option<PkiServerName<'static>> {
+        match self.payload {
+            ServerNamePayload::HostName(ref dns) => Some(PkiServerName::DnsName(dns.clone())),
+            ServerNamePayload::IpAddress(PayloadU16(ref ip)) if ip.len() == 4 => {
+                Some(PkiServerName::from(std::net::IpAddr::from([
+                    ip[0], ip[1], ip[2], ip[2],
+                ])))
+            }
+            ServerNamePayload::IpAddress(_) | ServerNamePayload::Unknown(_) => None,
+        }
+    }
 }
 
 impl Codec<'_> for ServerName {
@@ -981,7 +995,7 @@ impl ClientHelloPayload {
             .find(|x| x.ext_type() == ext)
     }
 
-    pub(crate) fn sni_extension(&self) -> Option<&[ServerName]> {
+    pub fn sni_extension(&self) -> Option<&[ServerName]> {
         let ext = self.find_extension(ExtensionType::ServerName)?;
         match *ext {
             // Does this comply with RFC6066?
@@ -1066,11 +1080,11 @@ impl ClientHelloPayload {
     }
 
     #[cfg(feature = "tls12")]
-    pub(crate) fn ticket_extension(&self) -> Option<&ClientExtension> {
+    pub fn ticket_extension(&self) -> Option<&ClientExtension> {
         self.find_extension(ExtensionType::SessionTicket)
     }
 
-    pub(crate) fn versions_extension(&self) -> Option<&[ProtocolVersion]> {
+    pub fn versions_extension(&self) -> Option<&[ProtocolVersion]> {
         let ext = self.find_extension(ExtensionType::SupportedVersions)?;
         match *ext {
             ClientExtension::SupportedVersions(ref vers) => Some(vers),
@@ -1352,8 +1366,8 @@ pub struct ServerHelloPayload {
     pub extensions: Vec<ServerExtension>,
     pub(crate) legacy_version: ProtocolVersion,
     pub(crate) random: Random,
-    pub(crate) session_id: SessionId,
-    pub(crate) cipher_suite: CipherSuite,
+    pub session_id: SessionId,
+    pub cipher_suite: CipherSuite,
     pub(crate) compression_method: Compression,
 }
 
@@ -1420,7 +1434,7 @@ impl ServerHelloPayload {
     }
 
     #[cfg(feature = "tls12")]
-    pub(crate) fn ems_support_acked(&self) -> bool {
+    pub fn ems_support_acked(&self) -> bool {
         self.find_extension(ExtensionType::ExtendedMasterSecret)
             .is_some()
     }
