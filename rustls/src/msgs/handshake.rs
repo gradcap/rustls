@@ -874,7 +874,7 @@ impl ClientHelloPayload {
             .find(|x| x.get_type() == ext)
     }
 
-    pub(crate) fn get_sni_extension(&self) -> Option<&[ServerName]> {
+    pub fn get_sni_extension(&self) -> Option<&[ServerName]> {
         let ext = self.find_extension(ExtensionType::ServerName)?;
         match *ext {
             ClientExtension::ServerName(ref req) => Some(req),
@@ -931,7 +931,7 @@ impl ClientHelloPayload {
         self.find_extension(ExtensionType::SessionTicket)
     }
 
-    pub(crate) fn get_versions_extension(&self) -> Option<&[ProtocolVersion]> {
+    pub fn get_versions_extension(&self) -> Option<&[ProtocolVersion]> {
         let ext = self.find_extension(ExtensionType::SupportedVersions)?;
         match *ext {
             ClientExtension::SupportedVersions(ref vers) => Some(vers),
@@ -1162,8 +1162,8 @@ impl HelloRetryRequest {
 pub struct ServerHelloPayload {
     pub(crate) legacy_version: ProtocolVersion,
     pub(crate) random: Random,
-    pub(crate) session_id: SessionId,
-    pub(crate) cipher_suite: CipherSuite,
+    pub session_id: SessionId,
+    pub cipher_suite: CipherSuite,
     pub(crate) compression_method: Compression,
     pub(crate) extensions: Vec<ServerExtension>,
 }

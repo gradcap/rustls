@@ -356,7 +356,7 @@ impl Codec for ServerSessionValue {
 }
 
 impl ServerSessionValue {
-    pub(crate) fn new(
+    pub fn new(
         sni: Option<&DnsName<'_>>,
         v: ProtocolVersion,
         cs: CipherSuite,
@@ -383,7 +383,7 @@ impl ServerSessionValue {
     }
 
     #[cfg(feature = "tls12")]
-    pub(crate) fn set_extended_ms_used(&mut self) {
+    pub fn set_extended_ms_used(&mut self) {
         self.extended_ms = true;
     }
 
