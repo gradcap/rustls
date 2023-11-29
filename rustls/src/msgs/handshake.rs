@@ -1249,7 +1249,7 @@ impl ServerHelloPayload {
     }
 
     #[cfg(feature = "tls12")]
-    pub(crate) fn ems_support_acked(&self) -> bool {
+    pub fn ems_support_acked(&self) -> bool {
         self.find_extension(ExtensionType::ExtendedMasterSecret)
             .is_some()
     }
