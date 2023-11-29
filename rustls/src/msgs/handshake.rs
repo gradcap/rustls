@@ -18,7 +18,7 @@ use crate::rand;
 use crate::verify::DigitallySignedStruct;
 use crate::x509::wrap_in_sequence;
 
-use pki_types::{CertificateDer, DnsName};
+use pki_types::{CertificateDer, DnsName, ServerName as PkiServerName};
 
 use alloc::collections::BTreeSet;
 #[cfg(feature = "logging")]
@@ -252,6 +252,15 @@ impl ServerNamePayload {
 pub struct ServerName {
     pub(crate) typ: ServerNameType,
     pub(crate) payload: ServerNamePayload,
+}
+
+impl ServerName {
+    pub fn as_pki(&self) -> Option<PkiServerName<'static>> {
+        match self.payload {
+            ServerNamePayload::HostName(ref dns) => Some(PkiServerName::DnsName(dns.clone())),
+            ServerNamePayload::Unknown(_) => None,
+        }
+    }
 }
 
 impl Codec for ServerName {
