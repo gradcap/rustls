@@ -408,7 +408,7 @@ pub mod internal {
                 CertificateChain, ClientExtension, ClientHelloPayload, DistinguishedName,
                 EchConfig, EchConfigContents, HandshakeMessagePayload, HandshakePayload,
                 HpkeKeyConfig, HpkeSymmetricCipherSuite, KeyShareEntry, Random, SessionId,
-                ServerHelloPayload,
+                ClientSessionTicket, ServerHelloPayload,
             };
         }
         pub mod message {
