@@ -271,7 +271,7 @@ impl<const N: usize> From<&[u8; N]> for PrefixedPayload {
     }
 }
 
-pub(crate) fn read_opaque_message_header(
+pub fn read_opaque_message_header(
     r: &mut Reader<'_>,
 ) -> Result<(ContentType, ProtocolVersion, u16), MessageError> {
     let typ = ContentType::read(r).map_err(|_| MessageError::TooShortForHeader)?;

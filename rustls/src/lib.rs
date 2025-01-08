@@ -463,6 +463,7 @@ pub mod internal {
             pub use crate::msgs::message::{
                 Message, MessagePayload, OutboundOpaqueMessage, PlainMessage,
             };
+            pub use crate::msgs::message::read_opaque_message_header;
         }
         pub mod persist {
             pub use crate::msgs::persist::ServerSessionValue;
