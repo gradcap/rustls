@@ -270,7 +270,7 @@ impl ServerName {
         match self.payload {
             ServerNamePayload::HostName(ref dns) => Some(PkiServerName::DnsName(dns.clone())),
             ServerNamePayload::IpAddress(PayloadU16(ref ip)) if ip.len() == 4 => {
-                Some(PkiServerName::from(std::net::IpAddr::from([
+                Some(PkiServerName::from(core::net::IpAddr::from([
                     ip[0], ip[1], ip[2], ip[2],
                 ])))
             }
